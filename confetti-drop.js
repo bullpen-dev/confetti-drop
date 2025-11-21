@@ -26,14 +26,15 @@ class ConfettiDrop extends HTMLElement {
           position: absolute;
           inset: 0;
           pointer-events: none;
+          overflow: hidden;
       }
 
       .particles {
           position: relative;
           width: 100%;
-          height: calc(100% + 250px);
-          overflow: hidden;
+          height: 100%;
           perspective: 500px;
+          container-type: size;
       }
 
       .particle {
@@ -43,9 +44,9 @@ class ConfettiDrop extends HTMLElement {
           width: var(--_particle-size);
           translate: var(--_translate-x) -50px 0;
           rotate: var(--_full-rotation);
-          animation: rotate calc(var(--_rotation-speed) * 1s) linear infinite,
-          translate calc(var(--_fall-time) * 1s) cubic-bezier(0, 0.19, 0.3, 0.45),
-          fade-out calc(var(--_fall-time) * 1s) ease-out;
+          animation:
+                  rotate calc(var(--_rotation-speed) * 1s) linear infinite,
+                  translate calc(var(--_fall-time) * 1s) cubic-bezier(0, 0.19, 0.3, 0.45);
           position: absolute;
           color: var(--_color);
           font-size: calc(var(--_particle-size) + 10px);
@@ -60,15 +61,6 @@ class ConfettiDrop extends HTMLElement {
       .square {
           background-color: var(--_color);
           scale: 0.8;
-      }
-
-      @keyframes fade-out {
-          0%, 90% {
-              opacity: 1;
-          }
-          100% {
-              opacity: 0;
-          }
       }
 
       @keyframes rotate {
@@ -86,7 +78,7 @@ class ConfettiDrop extends HTMLElement {
               translate: var(--_translate-x) -50px;
           }
           100% {
-              translate: calc(var(--_translate-x) + var(--_x-drift)) calc(100vh + 150px);
+              translate: calc(var(--_translate-x) + var(--_x-drift)) calc(100cqh + 50px);
           }
       }`;
 
@@ -102,6 +94,7 @@ class ConfettiDrop extends HTMLElement {
   #outstandingParticles = 0;
 
   #inBurstMode = false;
+	#shouldStopAfterBurst = false;
   #burstTimeout;
   #rid;
   #lastUpdated;
@@ -112,7 +105,7 @@ class ConfettiDrop extends HTMLElement {
   #shouldResume = false;
 
   get isRunning() {
-    return !!this.#rid;
+    return this.#rid !== null && this.#rid !== undefined;
   }
 
   connectedCallback() {
@@ -168,7 +161,7 @@ class ConfettiDrop extends HTMLElement {
         });
       },
       {
-        root: this.#particlesContainer,
+        root: this,
         rootMargin: "100px",
       },
     );
@@ -242,23 +235,28 @@ class ConfettiDrop extends HTMLElement {
   }
 
   burst() {
-    const shouldStartAndStop = !this.isRunning;
-    if (shouldStartAndStop) {
-      this.start();
-    }
+		if (!this.isRunning) {
+			this.start();
+			this.#shouldStopAfterBurst = true;
+		}
     this.#inBurstMode = true;
     if (this.#burstTimeout) {
       clearTimeout(this.#burstTimeout);
     }
     this.#burstTimeout = setTimeout(() => {
       this.#inBurstMode = false;
-      if (shouldStartAndStop) {
+      if (this.#shouldStopAfterBurst) {
         this.stop();
       }
+			this.#burstTimeout = null;
     }, 200);
   }
 
   #createParticles() {
+    if (!this.isRunning) {
+      return;
+    }
+
     const currentTime = performance.now();
     const delta = currentTime - this.#lastUpdated;
 
@@ -295,9 +293,19 @@ class ConfettiDrop extends HTMLElement {
     this.#rid = requestAnimationFrame(this.#boundCreateParticles);
   }
 
+  #calculateFallTime(baseFallTime) {
+    const containerHeight = this.#particlesContainer.offsetHeight;
+    const baseHeight = 1000;
+    return (containerHeight / baseHeight) * baseFallTime;
+  }
+
   #createParticle(burst) {
     const x = burst ? randomBetween(40, 60) : randomBetween(0, 100);
     const spawnTime = performance.now();
+    const baseFallTime = burst
+      ? randomBetween(2, 4)
+      : randomBetween(this.#fallTime - 2, this.#fallTime);
+
     return {
       type: this.#getRandomShape(),
       id: generateId(spawnTime),
@@ -307,9 +315,7 @@ class ConfettiDrop extends HTMLElement {
       rotZ: randomBetween(0, 1),
       rotDeg: randomBetween(0, 360),
       rotSpeed: randomBetween(1, 3),
-      fallTime: burst
-        ? randomBetween(2, 4)
-        : randomBetween(this.#fallTime - 2, this.#fallTime),
+      fallTime: this.#calculateFallTime(baseFallTime),
       x,
       xDrift: burst ? (x - 50) * 2 : randomBetween(-5, 5),
       color: this.#getRandomColor(),
@@ -360,8 +366,8 @@ class ConfettiDrop extends HTMLElement {
     particle.style.setProperty("--_rotation-deg", `${p.rotDeg}deg`);
     particle.style.setProperty("--_rotation-speed", `${p.rotSpeed}`);
     particle.style.setProperty("--_fall-time", `${p.fallTime}`);
-    particle.style.setProperty("--_translate-x", `${p.x}vw`);
-    particle.style.setProperty("--_x-drift", `${p.xDrift}vw`);
+    particle.style.setProperty("--_translate-x", `${p.x}cqw`);
+    particle.style.setProperty("--_x-drift", `${p.xDrift}cqw`);
     particle.style.setProperty("--_color", p.color);
     particle.style.setProperty("--_scale", p.scale);
 
